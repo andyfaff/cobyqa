@@ -16,6 +16,9 @@ from .subsolvers.optim import qr_tangential_byrd_omojokun
 from .utils import get_arrays_tol
 
 
+TINY = np.finfo(float).tiny
+EPS = np.finfo(float).eps
+
 class TrustRegion:
     """
     Trust-region framework.
@@ -466,18 +469,7 @@ class TrustRegion:
             fun_val, cub_val, ceq_val = self._pb(x)
         m_val = fun_val
         if self._penalty > 0.0:
-            c_val = np.block([
-                self._pb.bounds.xl - x,
-                x - self._pb.bounds.xu,
-                self._pb.linear.a_ub @ x - self._pb.linear.b_ub,
-                cub_val,
-            ])
-            c_val = np.maximum(c_val, 0.0)
-            c_val = np.block([
-                c_val,
-                np.abs(self._pb.linear.a_eq @ x - self._pb.linear.b_eq),
-                np.abs(ceq_val),
-            ])
+            c_val = self._pb.violation(x, cub_val=cub_val, ceq_val=ceq_val)
             m_val += self._penalty * np.linalg.norm(c_val)
         return m_val
 
@@ -746,7 +738,7 @@ class TrustRegion:
             norm_g_lag_proj = np.linalg.norm(g_lag_proj)
             if (
                 0 < n_act < self._pb.n
-                and norm_g_lag_proj > np.finfo(float).tiny * self.radius
+                and norm_g_lag_proj > TINY * self.radius
             ):
                 step_alt = (self.radius / norm_g_lag_proj) * g_lag_proj
                 if lag.curv(step_alt, self.models.interpolation) < 0.0:
@@ -885,7 +877,7 @@ class TrustRegion:
         )
         if (
             abs(merit_model_old - merit_model_new)
-            > np.finfo(float).tiny * abs(merit_old - merit_new)
+            > TINY * abs(merit_old - merit_new)
         ):
             return (
                 (merit_old - merit_new)
@@ -922,7 +914,7 @@ class TrustRegion:
             self._lm_nonlinear_ub,
             self._lm_nonlinear_eq,
         ]))
-        if abs(viol_diff) > np.finfo(float).tiny * abs(sqp_val):
+        if abs(viol_diff) > TINY * abs(sqp_val):
             threshold = max(threshold, sqp_val / viol_diff)
         best_index_save = self.best_index
         if (
@@ -962,7 +954,7 @@ class TrustRegion:
         )
         tol = (
             10.0
-            * np.finfo(float).eps
+            * EPS
             * max(self.models.n, self.models.npt)
             * max(abs(m_best), 1.0)
         )
@@ -1224,7 +1216,7 @@ class TrustRegion:
             f_max = np.nanmax(self.models.fun_val)
             c_min_neg = np.minimum(0.0, c_min[indices])
             c_diff = np.min(c_max[indices] - c_min_neg)
-            if c_diff > np.finfo(float).tiny * (f_max - f_min):
+            if c_diff > TINY * (f_max - f_min):
                 penalty = (f_max - f_min) / c_diff
             else:
                 penalty = np.inf

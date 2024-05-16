@@ -8,6 +8,7 @@ from scipy.optimize import (
     NonlinearConstraint,
     OptimizeResult,
 )
+from scipy.optimize._constraints import PreparedConstraint
 
 from .settings import PRINT_OPTIONS, BARRIER
 from .utils import CallbackSuccess, get_arrays_tol
@@ -124,6 +125,7 @@ class BoundConstraints:
         # Remove the ill-defined bounds.
         self.xl[np.isnan(self.xl)] = -np.inf
         self.xu[np.isnan(self.xu)] = np.inf
+        self.pcs = PreparedConstraint(bounds, np.ones(bounds.lb.size))
 
     @property
     def xl(self):
@@ -194,9 +196,15 @@ class BoundConstraints:
         float
             Maximum constraint violation at `x`.
         """
+        return self.violation(x)
+
+    def violation(self, x):
         x = np.asarray(x, dtype=float)
-        val = np.max(self.xl - x, initial=0.0)
-        return np.max(x - self.xu, initial=val)
+        # shortcut for no bounds
+        if np.isinf(self.xl).all() and np.isinf(self.xu).all():
+            return 0.0
+        else:
+            return self.pcs.violation(x)
 
     def project(self, x):
         """
@@ -243,6 +251,8 @@ class LinearConstraints:
         self._b_ub = np.empty(0)
         self._a_eq = np.empty((0, n))
         self._b_eq = np.empty(0)
+        self.pcs = [PreparedConstraint(c, np.ones(n)) for c in constraints if c.A.size]
+
         for constraint in constraints:
             is_equality = (
                 np.abs(constraint.ub - constraint.lb)
@@ -364,11 +374,13 @@ class LinearConstraints:
         float
             Maximum constraint violation at `x`.
         """
+        return np.max(self.violation(x), initial=0.0)
+
+    def violation(self, x):
         x = np.array(x, dtype=float)
-        return np.max([
-            np.max(self.a_ub @ x - self.b_ub, initial=0.0),
-            np.max(np.abs(self.a_eq @ x - self.b_eq), initial=0.0),
-        ])
+        if len(self.pcs):
+            return np.concatenate([pc.violation(x) for pc in self.pcs])
+        return np.array([0.0])
 
 
 class NonlinearConstraints:
@@ -400,6 +412,7 @@ class NonlinearConstraints:
             assert isinstance(debug, bool)
 
         self._constraints = constraints
+        self.pcs = [PreparedConstraint(c) for c in constraints]
         self._verbose = verbose
         self._m_ub = None
         self._m_eq = None
@@ -561,13 +574,18 @@ class NonlinearConstraints:
         float
             Maximum constraint violation at `x`.
         """
-        if cub_val is None or ceq_val is None:
-            cub_val, ceq_val = self(x)
-        return np.max([
-            np.max(cub_val, initial=0.0),
-            np.max(np.abs(ceq_val), initial=0.0),
-        ])
+        return np.max(self.violation(x, cub_val=cub_val, ceq_val=ceq_val), initial=0.0)
 
+    def violation(self, x, cub_val=None, ceq_val=None):
+        x = np.array(x, dtype=float)
+        if cub_val is None or ceq_val is None:
+            return np.concatenate([pc.violation(x) for pc in self.pcs])
+        else:
+            v = np.concatenate([cub_val, ceq_val])
+            if not len(v):
+                return np.array([0.])
+            else:
+                return v
 
 class Problem:
     """
@@ -745,6 +763,8 @@ class Problem:
         self._fun_history = []
         self._maxcv_history = []
         self._x_history = []
+        self._x_cache = None
+        self._violation_cache = None
 
     def __call__(self, x):
         """
@@ -1128,11 +1148,18 @@ class Problem:
         float
             Maximum constraint violation at `x`.
         """
-        return np.max([
-            self.bounds.maxcv(x),
-            self.linear.maxcv(x),
-            self._nonlinear.maxcv(x, cub_val, ceq_val),
-        ])
+        return np.max(self.violation(x, cub_val=cub_val, ceq_val=ceq_val), initial=0.0)
+
+    def violation(self, x, cub_val=None, ceq_val=None):
+        if (self._x_cache == x).all():
+            return self._violation_cache
+        else:
+            b = self.bounds.violation(x)
+            lc = self.linear.violation(x)
+            nlc = self._nonlinear.maxcv(x, cub_val, ceq_val)
+            self._violation_cache = np.r_[b, lc, nlc]
+            self._x_cache = x
+            return self._violation_cache
 
     def best_eval(self, penalty):
         """
