@@ -125,6 +125,8 @@ class BoundConstraints:
         # Remove the ill-defined bounds.
         self.xl[np.isnan(self.xl)] = -np.inf
         self.xu[np.isnan(self.xu)] = np.inf
+        self.is_feasible = np.all(self.xl <= self.xu) and np.all(self.xl < np.inf) and np.all(self.xu > -np.inf)
+        self.m = np.count_nonzero(self.xl > -np.inf) + np.count_nonzero(self.xu < np.inf)
         self.pcs = PreparedConstraint(bounds, np.ones(bounds.lb.size))
 
     @property
@@ -151,37 +153,6 @@ class BoundConstraints:
         """
         return self._xu
 
-    @property
-    def m(self):
-        """
-        Number of bound constraints.
-
-        Returns
-        -------
-        int
-            Number of bound constraints.
-        """
-        return (
-            np.count_nonzero(self.xl > -np.inf)
-            + np.count_nonzero(self.xu < np.inf)
-        )
-
-    @property
-    def is_feasible(self):
-        """
-        Whether the bound constraints are feasible.
-
-        Returns
-        -------
-        bool
-            Whether the bound constraints are feasible.
-        """
-        return (
-            np.all(self.xl <= self.xu)
-            and np.all(self.xl < np.inf)
-            and np.all(self.xu > -np.inf)
-        )
-
     def maxcv(self, x):
         """
         Evaluate the maximum constraint violation.
@@ -199,10 +170,9 @@ class BoundConstraints:
         return self.violation(x)
 
     def violation(self, x):
-        x = np.asarray(x, dtype=float)
         # shortcut for no bounds
-        if np.isinf(self.xl).all() and np.isinf(self.xu).all():
-            return 0.0
+        if self.is_feasible:
+            return np.zeros_like(x)
         else:
             return self.pcs.violation(x)
 
@@ -380,7 +350,7 @@ class LinearConstraints:
         x = np.array(x, dtype=float)
         if len(self.pcs):
             return np.concatenate([pc.violation(x) for pc in self.pcs])
-        return np.array([0.0])
+        return np.array([])
 
 
 class NonlinearConstraints:
@@ -582,10 +552,7 @@ class NonlinearConstraints:
             return np.concatenate([pc.violation(x) for pc in self.pcs])
         else:
             v = np.concatenate([cub_val, ceq_val])
-            if not len(v):
-                return np.array([0.])
-            else:
-                return v
+            return v
 
 class Problem:
     """
@@ -1148,7 +1115,10 @@ class Problem:
         float
             Maximum constraint violation at `x`.
         """
-        return np.max(self.violation(x, cub_val=cub_val, ceq_val=ceq_val), initial=0.0)
+        violation = self.violation(x, cub_val=cub_val, ceq_val=ceq_val)
+        if np.count_nonzero(violation):
+            return np.max(self.violation(x, cub_val=cub_val, ceq_val=ceq_val), initial=0.0)
+        return 0
 
     def violation(self, x, cub_val=None, ceq_val=None):
         if (self._x_cache == x).all():
@@ -1156,8 +1126,11 @@ class Problem:
         else:
             b = self.bounds.violation(x)
             lc = self.linear.violation(x)
-            nlc = self._nonlinear.maxcv(x, cub_val, ceq_val)
-            self._violation_cache = np.r_[b, lc, nlc]
+            nlc = self._nonlinear.violation(x, cub_val, ceq_val)
+            if self.bounds.m or len(self.linear.pcs) or len(self._nonlinear.pcs):
+                self._violation_cache = np.r_[b, lc, nlc]
+            else:
+                self._violation_cache = np.zeros((b.size + lc.size + nlc.size,))
             self._x_cache = x
             return self._violation_cache
 
