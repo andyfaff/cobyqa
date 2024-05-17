@@ -106,7 +106,8 @@ def tangential_byrd_omojokun(grad, hess_prod, xl, xu, delta, debug, **kwargs):
     boundary_reached = False
     while k < np.count_nonzero(free_bd):
         # Stop the computations if sd is not a descent direction.
-        grad_sd = grad @ sd
+        grad_sd = np.dot(grad, sd)
+
         if (
             grad_sd
             >= -10.0 * EPS * n * max(1.0, np.linalg.norm(grad))
@@ -1225,9 +1226,9 @@ def qr_normal_byrd_omojokun(aub, free_xl, free_xu, free_slack, free_ub):
 
 
 def _alpha_tr(step, sd, delta):
-    step_sd = step @ sd
-    sd_sq = sd @ sd
-    dist_tr_sq = delta**2.0 - step @ step
+    step_sd = np.dot(step, sd)
+    sd_sq = np.dot(sd, sd)
+    dist_tr_sq = delta**2.0 - np.dot(step, step)
     temp = np.sqrt(max(step_sd**2.0 + sd_sq * dist_tr_sq, 0.0))
     if step_sd <= 0.0 and sd_sq > TINY * abs(temp - step_sd):
         alpha_tr = max((temp - step_sd) / sd_sq, 0.0)
