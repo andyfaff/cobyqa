@@ -1124,13 +1124,18 @@ class Problem:
         if (self._x_cache == x).all():
             return self._violation_cache
         else:
+            violation = []
             b = self.bounds.violation(x)
-            lc = self.linear.violation(x)
-            nlc = self._nonlinear.violation(x, cub_val, ceq_val)
-            if self.bounds.m or len(self.linear.pcs) or len(self._nonlinear.pcs):
-                self._violation_cache = np.r_[b, lc, nlc]
-            else:
-                self._violation_cache = np.zeros((b.size + lc.size + nlc.size,))
+            violation.append(b)
+
+            if len(self.linear.pcs):
+                lc = self.linear.violation(x)
+                violation.append(lc)
+            if len(self._nonlinear.pcs):
+                nlc = self._nonlinear.violation(x, cub_val, ceq_val)
+                violation.append(nlc)
+
+            self._violation_cache = np.block(violation)
             self._x_cache = x
             return self._violation_cache
 
