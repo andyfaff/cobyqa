@@ -534,7 +534,7 @@ class Quadratic:
             raise np.linalg.LinAlgError(
                 "The interpolation system is ill-defined."
             )
-        eig_values, eig_vectors = eigh(a, driver='evd', check_finite=False)
+        eig_values, eig_vectors = eigh(a, driver='evd', check_finite=False, lower=False)
         large_eig_values = np.abs(eig_values) > EPS
         eig_vectors = eig_vectors[:, large_eig_values]
         inv_eig_values = 1.0 / eig_values[large_eig_values]

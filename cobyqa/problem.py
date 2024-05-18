@@ -172,7 +172,7 @@ class BoundConstraints:
     def violation(self, x):
         # shortcut for no bounds
         if self.is_feasible:
-            return np.zeros_like(x)
+            return np.array([])
         else:
             return self.pcs.violation(x)
 
@@ -1125,8 +1125,9 @@ class Problem:
             return self._violation_cache
         else:
             violation = []
-            b = self.bounds.violation(x)
-            violation.append(b)
+            if not self.bounds.is_feasible:
+                b = self.bounds.violation(x)
+                violation.append(b)
 
             if len(self.linear.pcs):
                 lc = self.linear.violation(x)
@@ -1135,7 +1136,10 @@ class Problem:
                 nlc = self._nonlinear.violation(x, cub_val, ceq_val)
                 violation.append(nlc)
 
-            self._violation_cache = np.block(violation)
+            if len(violation):
+                self._violation_cache = np.block(violation)
+            else:
+                self._violation_cache = np.array([])
             self._x_cache = x
             return self._violation_cache
 
