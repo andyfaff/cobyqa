@@ -460,7 +460,7 @@ def minimize(
     # Initialize the constraints.
     linear_constraints, nonlinear_constraints = _get_constraints(constraints)
     linear = LinearConstraints(linear_constraints, n_orig, debug)
-    nonlinear = NonlinearConstraints(nonlinear_constraints, verbose, debug)
+    nonlinear = NonlinearConstraints(nonlinear_constraints, n_orig, verbose, debug)
 
     # Initialize the problem (and remove the fixed variables).
     pb = Problem(

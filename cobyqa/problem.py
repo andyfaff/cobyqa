@@ -358,7 +358,7 @@ class NonlinearConstraints:
     Nonlinear constraints ``c_ub(x) <= 0`` and ``c_eq(x) == b_eq``.
     """
 
-    def __init__(self, constraints, verbose, debug):
+    def __init__(self, constraints, n, verbose, debug):
         """
         Initialize the nonlinear constraints.
 
@@ -366,6 +366,8 @@ class NonlinearConstraints:
         ----------
         constraints : list
             Nonlinear constraints.
+        n : int
+            Number of variables.
         verbose : bool
             Whether to print the function evaluations.
         debug : bool
@@ -382,7 +384,7 @@ class NonlinearConstraints:
             assert isinstance(debug, bool)
 
         self._constraints = constraints
-        self.pcs = [PreparedConstraint(c) for c in constraints]
+        self.pcs = [PreparedConstraint(c, np.ones(n)) for c in constraints]
         self._verbose = verbose
         self._m_ub = None
         self._m_eq = None

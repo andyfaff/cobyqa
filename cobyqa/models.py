@@ -194,7 +194,7 @@ def build_system(interpolation):
     # Compute the scaled directions from the base point to the
     # interpolation points. We scale the directions to avoid numerical
     # difficulties.
-    if _cache['xpt'] is not None and (interpolation.xpt == _cache['xpt']).all():
+    if _cache['xpt'] is not None and np.array_equal(interpolation.xpt, _cache['xpt']):
         return _cache['a'], _cache['right_scaling']
 
     scale = np.max(np.linalg.norm(interpolation.xpt, axis=0), initial=EPS)
@@ -534,7 +534,7 @@ class Quadratic:
             raise np.linalg.LinAlgError(
                 "The interpolation system is ill-defined."
             )
-        eig_values, eig_vectors = eigh(a, driver='evd', check_finite=False, lower=False)
+        eig_values, eig_vectors = eigh(a, check_finite=False)
         large_eig_values = np.abs(eig_values) > EPS
         eig_vectors = eig_vectors[:, large_eig_values]
         inv_eig_values = 1.0 / eig_values[large_eig_values]
